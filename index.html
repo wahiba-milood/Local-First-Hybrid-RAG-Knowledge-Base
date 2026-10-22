@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local-First Hybrid RAG Knowledge Base</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="mb-8 border-b border-slate-800 pb-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-teal-400">📚 Local-First Hybrid RAG Knowledge Base</h1>
+                <p class="text-slate-400 text-sm mt-1">نظام بحث هجين محلي بالكامل (Semantic + BM25) مع تشغيل نماذج الذكاء الاصطناعي أوفلاين.</p>
+            </div>
+            <span class="bg-teal-900 text-teal-300 text-xs px-3 py-1 rounded-full border border-teal-700">Privacy-First / Offline</span>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- إضافة مستند للقاعدة المعرفية -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg flex flex-col">
+                <h2 class="text-lg font-semibold mb-3 text-teal-300">➕ إضافة مستند جديد</h2>
+                <div class="mb-3">
+                    <label class="block text-xs text-slate-400 mb-1">عنوان المستند:</label>
+                    <input type="text" id="docTitle" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500" placeholder="مثال: سياسة الشركة الداخلية">
+                </div>
+                <div class="mb-4 flex-1">
+                    <label class="block text-xs text-slate-400 mb-1">محتوى المستند (نص أو أكواد):</label>
+                    <textarea id="docText" rows="8" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 font-mono text-sm text-slate-200 focus:outline-none focus:border-teal-500 resize-none" placeholder="الصق النص هنا..."></textarea>
+                </div>
+                <button onclick="addDocument()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-2.5 rounded-lg transition duration-200 shadow">فهرسة وحفظ محلياً</button>
+                <p id="addStatus" class="text-xs text-center mt-2 text-emerald-400"></p>
+            </div>
+
+            <!-- قسم البحث والاستعلام الذكي -->
+            <div class="lg:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg flex flex-col">
+                <h2 class="text-lg font-semibold mb-3 text-teal-300">💬 الاستعلام والبحث الهجين</h2>
+                <div class="mb-4">
+                    <div class="flex gap-2">
+                        <input type="text" id="queryInput" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-teal-500" placeholder="اطرح سؤالاً حول المستندات المضافة...">
+                        <button onclick="runQuery()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg transition duration-200 shadow">بحث واستنتاج</button>
+                    </div>
+                </div>
+
+                <div id="loader" class="hidden flex items-center justify-center py-8 text-teal-400">
+                    <svg class="animate-spin h-6 w-6 mr-3 text-teal-500" viewBox="0 0 24 24" fill="none">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                    </svg>
+                    جاري البحث الهجين والتوليد عبر Ollama...
+                </div>
+
+                <div class="flex-1 flex flex-col gap-4">
+                    <div>
+                        <span class="text-xs font-semibold text-slate-400 block mb-1">الإجابة المستنتجة:</span>
+                        <div id="answerOutput" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 min-h-[100px] whitespace-pre-wrap">ستظهر الإجابة هنا...</div>
+                    </div>
+                    <div>
+                        <span class="text-xs font-semibold text-slate-400 block mb-1">المصادر المسترجعة (Retrieved Chunks):</span>
+                        <div id="sourcesOutput" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 font-mono text-xs text-teal-300 h-32 overflow-y-auto whitespace-pre-wrap">ستظهر النصوص المرتبطة هنا...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = "http://127.0.0.1:8000/api";
+
+        async function addDocument() {
+            const title = document.getElementById('docTitle').value;
+            const text = document.getElementById('docText').value;
+            const statusEl = document.getElementById('addStatus');
+
+            if (!text.trim()) {
+                alert('الرجاء إدخال نص المستند!');
+                return;
+            }
+
+            statusEl.textContent = 'جاري الفهرسة...';
+
+            try {
+                const response = await fetch(`${API_BASE}/add-document`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, text })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    statusEl.textContent = '✅ تم حفظ وفهرسة المستند بنجاح!';
+                    document.getElementById('docText').value = '';
+                    document.getElementById('docTitle').value = '';
+                } else {
+                    statusEl.textContent = `❌ خطأ: ${data.detail}`;
+                }
+            } catch (error) {
+                statusEl.textContent = `❌ خطأ في الاتصال بالخادم`;
+            }
+        }
+
+        async function runQuery() {
+            const query = document.getElementById('queryInput').value;
+            const answerEl = document.getElementById('answerOutput');
+            const sourcesEl = document.getElementById('sourcesOutput');
+            const loaderEl = document.getElementById('loader');
+
+            if (!query.trim()) {
+                alert('الرجاء إدخال سؤال!');
+                return;
+            }
+
+            loaderEl.classList.remove('hidden');
+            answerEl.textContent = '';
+            sourcesEl.textContent = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                const data = await response.json();
+                loaderEl.classList.add('hidden');
+
+                if (response.ok) {
+                    answerEl.textContent = data.answer;
+                    sourcesEl.textContent = data.sources.join("\n\n---\n\n") || "لا توجد مصادر مطابقة.";
+                } else {
+                    answerEl.textContent = `خطأ: ${data.detail}`;
+                }
+            } catch (error) {
+                loaderEl.classList.add('hidden');
+                answerEl.textContent = `خطأ في الاتصال بالخادم الخلفي: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
